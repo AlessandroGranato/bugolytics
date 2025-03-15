@@ -1,20 +1,12 @@
-import 'dart:convert';
-
-import 'package:bugolytics/application/utils/connection_utils.dart';
-import 'package:bugolytics/application/utils/environments.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:bugolytics/application/providers/auth_token_storage_provider.dart';
+import 'package:bugolytics/application/utils/dio_client.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AuthService {
-  final _dio = createDio(
-    url: '${Environments.boogleBackendUrl}/auth/api/auth',
-    trustSelfCertificate: true,
-  );
-  final _flutterSecureStorage = const FlutterSecureStorage();
+  final Ref ref;
+  final _dio = DioClient.instance;
 
-  Future<void> saveTokens(String accessToken, String refreshToken) async {
-    await _flutterSecureStorage.write(key: 'accessToken', value: accessToken);
-    await _flutterSecureStorage.write(key: 'refreshToken', value: refreshToken);
-  }
+  AuthService(this.ref);
 
   Future<void> register(
       String username, String email, String password, Set<String> roles) async {
@@ -30,18 +22,23 @@ class AuthService {
     }
   }
 
-  Future<void> login(String username, String password) async {
+  Future<bool> login(String username, String password) async {
     try {
-      final response = await _dio.post('/signin', data: {
+      final response = await _dio.post('/auth/api/auth/signin', data: {
         'username': username,
         'password': password,
       });
       if (response.statusCode == 200) {
-        final accessToken = jsonDecode(response.data)['accessToken'];
-        final refreshToken = jsonDecode(response.data)['refreshToken'];
-        await saveTokens(accessToken, refreshToken);
+        final accessToken = response.data['accessToken'];
+        final refreshToken = response.data['refreshToken'];
+        await ref
+            .read(authTokenStorageProvider.notifier)
+            .saveTokens(accessToken, refreshToken);
+        return true;
       } else {
         // TODO Handle different errors based on codes returned
+        print("Error during login");
+        return false;
       }
     } catch (e) {
       throw Exception("Login failed");
@@ -49,33 +46,42 @@ class AuthService {
   }
 
   Future<void> logout() async {
-    await _flutterSecureStorage.delete(key: 'accessToken');
-    await _flutterSecureStorage.delete(key: 'refreshToken');
+    await ref.read(authTokenStorageProvider.notifier).clearTokens();
   }
 
-  Future<void> refreshToken() async {
+  Future<bool> refreshToken() async {
     try {
       String? refreshToken =
-          await _flutterSecureStorage.read(key: 'refreshToken');
+          await ref.read(authTokenStorageProvider.notifier).getRefreshToken();
       if (refreshToken == null) {
         //TODO TEST: handle login. Try in this way: call here logout function and check if automatically return to login (after you write the part that connects main page to accessToken being not null)
         await logout();
-        return;
+        return false;
       }
-      final response = await _dio.post('/refresh-token', data: {
+      final response = await _dio.post('/auth/api/auth/refresh-token', data: {
         'refreshToken': refreshToken,
       });
 
       if (response.statusCode == 200) {
-        final newAccessToken = jsonDecode(response.data)['accessToken'];
-        final newRefreshToken = jsonDecode(response.data)['refreshToken'];
-        await saveTokens(newAccessToken, newRefreshToken);
+        final newAccessToken = response.data['accessToken'];
+        final newRefreshToken = response.data['refreshToken'];
+        await ref
+            .read(authTokenStorageProvider.notifier)
+            .saveTokens(newAccessToken, newRefreshToken);
+        return true;
       } else {
         // TODO TEST: Handle token refresh failure, redirect to login. Try in this way: call here logout function and check if automatically return to login (after you write the part that connects main page to accessToken being not null)
         await logout();
+        return false;
       }
     } catch (e) {
       throw Exception("refresh token failed");
     }
+  }
+
+  Future<bool> isAuthenticated() async {
+    final accessToken =
+        await ref.read(authTokenStorageProvider.notifier).getAccessToken();
+    return accessToken != null;
   }
 }
