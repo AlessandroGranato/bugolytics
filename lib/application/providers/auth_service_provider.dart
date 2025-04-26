@@ -7,7 +7,6 @@ import 'package:bugolytics/application/utils/environments.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 
-
 class AuthService {
   final Ref _ref;
   late final Dio _dio; //Dio instance only for authService. Other service will use DioClient, which will use AuthService::refreshToken in case of 401 response
@@ -30,14 +29,13 @@ class AuthService {
     };
   }
 
-  Future<void> register(
-      String username, String email, String password, Set<String> roles) async {
+  Future<void> register(String username, String email, String password, Set<String>? roles) async {
     try {
       await _dio.post('/auth/api/auth/signup', data: {
         'username': username,
         'email': email,
         'password': password,
-        'roles': roles,
+        'roles': roles ?? ["user"],
       });
     } catch (e) {
       throw Exception("Registration failed");
@@ -56,6 +54,8 @@ class AuthService {
         await _ref
             .read(authTokenStorageProvider.notifier)
             .saveTokens(accessToken, refreshToken);
+        print("Login executed successfully");
+        print("Login response: $response");
         return true;
       } else {
         // TODO Handle different errors based on codes returned
