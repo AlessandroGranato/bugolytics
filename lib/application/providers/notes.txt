@@ -1,0 +1,13 @@
+Use FutureProvider or AsyncNotifier for:
+    Simple, read-only backend calls
+    Auto-managed loading/error states
+    Stateless UI that reacts to async data
+Example:
+    Retrieving list of temperatures from backend (we don't need to modify them)
+
+Use StateNotifier for:
+    More complex state (e.g., form editing, item selection, app logic)
+    Managing lists with mutations (add/remove/update)
+    Fine-grained control over logic
+Example:
+    Handling the device put by the user (we need to be able to delete it if the user wants it)
